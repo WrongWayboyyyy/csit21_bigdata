@@ -1,9 +1,24 @@
-## sbt project compiled with Dotty
+# Учебный проект по дисциплине <q>Распределенные системы и вычисления</q>  
 
-### Usage
+## Анализ данных о случаях применения оружия в США в 2013-2018 годах
 
-This is a normal sbt project, you can compile code with `sbt compile` and run it
-with `sbt run`, `sbt console` will start a Dotty REPL.
+Выполнили студенты 251 группы направления <q>Программная инженерия</q>:
 
-For more information on the sbt-dotty plugin, see the
-[dotty-example-project](https://github.com/lampepfl/dotty-example-project/blob/master/README.md).
+>1.Рыданов Никита  
+>2.Медведева Татьяна  
+>3.Легостаев Андрей  
+>4.Озеров Данила   
+
+Саратов, 2021
+
+## Сборка
+
+Для сборки проекта необходимо следующее:
+1. Установить Java Developer Kit (JDK)
+2. Установить git с помощью некоторого менеджера пакетов(apt/pacman/brew и т.д) или загрузив его с сайта (особенно актуально для Windows)  
+3. Склонировать репозиторий локально
+> git clone <https/ssh> <опциально: название папки>
+4. В терминале на устройстве или в среде разработки (например, в InteliJIDEA) написать
+> sbt build (для сборки)  
+> sbt run (для запуска проекта)  
+> sbt clean build/run (при повторном запуске)  
