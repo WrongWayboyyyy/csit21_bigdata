@@ -1,25 +1,58 @@
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.SparkContext
+import org.apache.spark
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.{SparkConf, SparkContext}
 
 object SparkDemo {
   def main(args: Array[String]): Unit = {
-    Logger.getRootLogger.setLevel(Level.INFO)
-    val sc = new SparkContext("local[*]", "SparkDemo")
+    Logger.getRootLogger.setLevel(Level.INFO) // Пока не знаю, что это
 
-    val lines = sc.parallelize(List("hello world", "hello spark", "hello", "sevak", "avetisyan", "spark"))
+    val sc = new SparkContext("local[*]", "SparkDemo") // Создание нового контекста
+    //val m = sc.textFile(inputPath) // Должно быть раскоменчено, когда будем работать с реальным файлом
+    // Тестовая строка
+    val s = "date, country, event \n 27.03.1982, Russia, 9 May \n 29.04.1982, USA, Mother's day \n 22.03.2020, UK, shit";
+    // Переменная содержит в себе все колонки,
+    // split - разделение по символу,
+    // map - отображение по лямбде,
+    // trim - игнорирование пробелов.
+    val columns = s.split("\n")(0).split(',').map(x => x.trim())
+    // Распараллеливаем данные (более точно сказать, что это и как работает пока не могу)
+    val lines = sc.parallelize(List(s));
+    // Делаем преобразования над RDD
     val wordCountRdd = lines
-      .flatMap(line => line.split(" "))
-      .map(x => (x, 1))
-      .reduceByKey((x, y) => x + y)
+      // Делим по \n, чтобы получить как бы отдельную колонку данных,
+      // при этом выкидываем первую, которая содержит сами значения колонок (drop)
+      .flatMap(line => line.split("\n").drop(1))
+      // Преобразуем каждый получившийся элемент в лист, элементами которого
+      // являются разделенный по запятой строки (по сути элементы таблицы)
+      .flatMap(x => List(x.split(",") ))
+      // На этом шаге x - массив строк, преобразуем его в массив из
+      // кортежа (строка, число), чтобы число хранило индекс
+      // текущей строки среди всех (даты будут иметь индекс 0, страна индекс 1 и т.д)
+      .flatMap(x => x.map(s => (s.trim(), x.indexOf(s))))
+      // Заменим инт в качестве второго элемента собственно на тип информации
+      // (для этого мы и хранилы индексы). Теперь мы знаем, что строка
+      // являющаяся первым элементом кортежа по смыслу представляет из себя
+      // значение второго кортежа
+      .map(x => (x._1, columns(x._2)))
+      // отделяем все, кроме страны
+      .filter(a => a._2.equals("country"))
+      // Знание о том, что это страна теперь бесполезно, заменим его на количество
+      // вхождений этого элемента
+      .map(a => (a._1, 1))
+      // Выполняем reduceByKey (лучше об этом почитать) и получаем количество
+      // вхождений каждой строки в нашем датасете
+      .reduceByKey(_ + _)
+      // Кэшируем данные для дальнейшего использования
       .cache()
 
-    wordCountRdd.foreach(println)
-
+    // Просто к каждому элементу Rdd применяем функцию вывода
+    wordCountRdd.foreach(x => println(x))
+    // Сортируем по убыванию и выводим (зачем нужны эти 2 отображения я не совсем понял)
     wordCountRdd
       .map(x => (x._2, x._1))
       .sortByKey(ascending = false)
       .map(x => (x._2, x._1))
-      .take(3)
       .foreach(println)
   }
 }
