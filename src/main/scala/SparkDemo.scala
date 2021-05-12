@@ -1,61 +1,91 @@
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark
-import org.apache.spark.sql.types.StructType
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
+import org.apache.spark.sql.functions.col
+
+// Класс для парсинга (содержит все те поля, что нужны для обработки DataFrame)
+case class Case(incident_id: Option[Long],
+                date: Option[String],
+                state : Option[String],
+                city_or_county: Option[String],
+                address : Option[String],
+                n_killed : Option[Long],
+                n_injured : Option[Long],
+                incident_url : Option[String],
+                source_url : Option[String],
+                incident_url_fields_missing : Option[Boolean],
+                congressional_district : Option[Long],
+                gun_stolen: Option[String],
+                gun_type: Option[String],
+                incident_characteristics: Option[String],
+                latitude: Option[Double],
+                location_description: Option[String],
+                longitude: Option[Double],
+                n_guns_involved: Option[Long],
+                notes: Option[String],
+                participant_age: Option[String],
+                participant_age_group: Option[String],
+                participant_gender: Option[String],
+                participant_name: Option[String],
+                participant_relationship: Option[String],
+                participant_status: Option[String],
+                participant_type: Option[String],
+                sources: Option[String],
+                state_house_district: Option[Long],
+                state_senate_district: Option[Long]
+               )
+
 
 object SparkDemo {
+  // Функция подсчета количества элементов по заданному фильтру
+  def countByFilter(ss: SparkSession, df: DataFrame, requiredFilter: String): Unit = {
+    import ss.sqlContext.implicits._
+    // Получаем strong-typed DataSet[Case] из generic-typed DataFrame и отбираем данные по нужному фильтру
+    val dataSet = df.as[Case].select(requiredFilter)
+    // Превращаем каждый элемент типа Case в пару (Case,int) собираем по ключу и кэшируем
+    val rdd = dataSet.rdd
+      .map(x => (x, 1))
+      .reduceByKey(_ + _)
+      .cache()
+
+    rdd
+      .map(x => (x._2, x._1)) // Мэпим, чтобы ключ стоял на первой позиции
+      .sortByKey(ascending = false) // Сортируем
+      .map(x=> (x._2, x._1)) // Мэпим обратно
+      .foreach(x => println(x)) // Выводим
+  }
   def main(args: Array[String]): Unit = {
     Logger.getRootLogger.setLevel(Level.INFO) // Пока не знаю, что это
+    // TODO: Соединение с Google Cloud BigQuery
+    // Раскоментить, когда будем загружать на Storage
+//    if (args.length != 2) {
+//      throw new IllegalArgumentException("Provide exactly 2 arguments")
+//    }
 
-    val sc = new SparkContext("local[*]", "SparkDemo") // Создание нового контекста
-    var lines = sc.textFile("data.csv") // Должно быть раскоменчено, когда будем работать с реальным файлом
-    val dataTypeRdd = lines
-      // Делим по \n, чтобы получить как бы отдельную колонку данных,
-      // при этом выкидываем первую, которая содержит сами значения колонок (drop)
-      .flatMap(line => line.split("\n"))
-      .cache()
-    // Собираем массив возможных типов данных (штат, регион и т.д)
-    val columns = dataTypeRdd.first().split(',').map(x => x.trim())
+   // val inputPath = args(0)
+   // val outputPath = args(1)
 
-    val filteredRdd = lines
-      // Преобразуем каждый получившийся элемент в лист, элементами которого
-      // являются разделенный по символу конца строки строки (по сути элементы таблицы)
-      .map(line => line.split("\n"))
-      // Разделим массив на блоки по разделителю |, сохраняя при этом его, чтобы
-      // понимать, какие строки являются первым блоком входных данных, а какие нет.
-      .map(array => array.flatMap(line => line.split("(?=\\|\\|)")))
-      // Разделим первый блок данных (до первого вхождения |) по разделителю
-      // запятой
-      .map(array => array.flatMap(line =>
-        if (!line.startsWith("\\|")) line.split(',') else Array(line)))
-      // Каждую строку приведем к кортежу (строка, число), где число
-      // будет означать индекс строки в текущем блоки
-      .flatMap(array => array.map(line => (line, array.indexOf(line))))
-      // Приведем кортеж вида (строка, число) к виду (строка, строка), где
-      // вторая строка указывает, к какому типу данных относится текущее значение
-      // TODO: Придумать как избавиться от костыля с min, чтобы не выходить за границы того массива.
-      .map(pair => (pair._1, columns(math.min(pair._2, 28))))
-      // Отделяем все, кроме необходимого
-      // TODO: Убрать последние 2 условия, когда фильтрация будет полностью корректной.
-      .filter(pair => pair._2.equals("state") &&
-        !pair._1.matches(".*[0-9]+.*") &&
-        !pair._1.equals(""))
-      // Знание о том, что это необходимый нам фильтр теперь бесполезно, з
-      // аменим его на количество вхождений этого элемента
-      .map(a => (a._1, 1))
-      // Выполняем reduceByKey (лучше об этом почитать) и получаем количество
-      // вхождений каждой строки в нашем датасете
-      .reduceByKey(_ + _)
-      // Кэшируем данные для дальнейшего использования
-      .cache()
-    // Сортируем по убыванию и выводим (зачем нужны эти 2 отображения я не совсем понял)
-    filteredRdd
-      .map(x => (x._2, x._1))
-      .sortByKey(ascending = false)
-      .map(x => (x._2, x._1))
-      .take(10)
-      .foreach(x => println(x))
-    //Thread.sleep(10 * 60 * 1000) Для локального запуска, чтобы не рухнуло
-    // С исключением
+    // Создаем новую сессию
+    val ss = SparkSession
+      .builder()
+      .appName("CSIT 2021 Spark Application")
+      .master("local[*]")
+      .getOrCreate()
+    // Считываем файл
+    val dataFrame = ss.read
+      .option("wholeFile", "true") // Магическая опция (немного даже не уверен, что нужна)
+      .option("multiline","true") // Аналогично
+      .option("header", "true") // Указываем, что в csv содержится заголовок
+      .option("inferSchema", "true") // Аналогично 1 и 2))
+      .option("quote", "\"") // Чтобы корректно читать nullField-ы в исходнои файле
+      .option("escape", "\"") // Аналогично
+      .option("encoding", "UTF-8") // На всякий случай
+      .option("dateFormat", "yyyy-MM-dd") // Аналогично
+      //.csv("gs://mmmmonkey/data.csv") Для запуска на клауде
+      .csv("data.csv") // Для локального запуска
+    // Вызываем наш метод
+    countByFilter(ss, dataFrame, "state")
+    // Для локального запуска
+    //Thread.sleep(10 * 60 * 1000) //Для локального запуска, чтобы не рухнул c исключением
   }
 }
