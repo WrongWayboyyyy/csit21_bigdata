@@ -66,7 +66,7 @@ object SparkDemo {
       .getOrCreate()
 
     val bucket = "temp"
-    //ss.conf.set("temporaryGcsBucket", bucket)
+    ss.conf.set("temporaryGcsBucket", bucket)
     // Считываем файл
     val df = ss.read
       .option("wholeFile", "true") // Магическая опция (немного даже не уверен, что нужна)
@@ -77,8 +77,8 @@ object SparkDemo {
       .option("escape", "\"") // Аналогично
       .option("encoding", "UTF-8") // На всякий случай
       .option("dateFormat", "yyyy-MM-dd") // Аналогично
-      //.csv("gs://mmmmonkey/data.csv") //Для запуска на клауде
-      .csv("data.csv") // Для локального запуска
+      .csv("gs://mmmmonkey/data.csv") //Для запуска на клауде
+      //.csv("data.csv") // Для локального запуска
 
     import ss.sqlContext.implicits._
     val dataSet = df.as[Case]
@@ -89,11 +89,13 @@ object SparkDemo {
       .reduceGroups((a, b) => (a._1 , a._2 + b._2))
       .map(x => x._2)
       .orderBy(col("_2").desc)
-      .show(10)
+      .write.format("bigquery")
+      .option("table", s"gun-shooting-analysis.city_output")
+      .save()
 
     // Вызываем наш метод
     //countByFilter(ss, dataFrame, "state")
     // Для локального запуска
-    Thread.sleep(10 * 60 * 1000) //Для локального запуска, чтобы не рухнул c исключением
+    //Thread.sleep(10 * 60 * 1000) //Для локального запуска, чтобы не рухнул c исключением
   }
 }
