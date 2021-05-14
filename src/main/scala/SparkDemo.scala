@@ -1,7 +1,7 @@
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.{asc, col}
 
 // Класс для парсинга (содержит все те поля, что нужны для обработки DataFrame)
 case class Case(incident_id: Option[Long],
@@ -41,22 +41,10 @@ object SparkDemo {
   def countByFilter(ss: SparkSession, df: DataFrame, requiredFilter: String): Unit = {
     import ss.sqlContext.implicits._
     // Получаем strong-typed DataSet[Case] из generic-typed DataFrame и отбираем данные по нужному фильтру
-    val dataSet = df.as[Case].select(requiredFilter)
+    val dataSet = df.as[Case].filter(requiredFilter).as[String]
     // Превращаем каждый элемент типа Case в пару (Case,int) собираем по ключу и кэшируем
-    val rdd = dataSet.rdd
-      .map(x => (x, 1))
-      .reduceByKey(_ + _)
-      .cache()
 
-    rdd.toDF().write.format("bigquery")
-      .option("table", s"gun-shooting-analysis.${requiredFilter}_output")
-      .save()
-
-    rdd
-      .map(x => (x._2, x._1)) // Мэпим, чтобы ключ стоял на первой позиции
-      .sortByKey(ascending = false) // Сортируем
-      .map(x=> (x._2, x._1)) // Мэпим обратно
-      .foreach(x => println(x)) // Выводим
+    //dataSet.map(x => (x, x.ci))
   }
 
   def main(args: Array[String]): Unit = {
@@ -78,9 +66,9 @@ object SparkDemo {
       .getOrCreate()
 
     val bucket = "temp"
-    ss.conf.set("temporaryGcsBucket", bucket)
+    //ss.conf.set("temporaryGcsBucket", bucket)
     // Считываем файл
-    val dataFrame = ss.read
+    val df = ss.read
       .option("wholeFile", "true") // Магическая опция (немного даже не уверен, что нужна)
       .option("multiline","true") // Аналогично
       .option("header", "true") // Указываем, что в csv содержится заголовок
@@ -89,11 +77,23 @@ object SparkDemo {
       .option("escape", "\"") // Аналогично
       .option("encoding", "UTF-8") // На всякий случай
       .option("dateFormat", "yyyy-MM-dd") // Аналогично
-      .csv("gs://mmmmonkey/data.csv") //Для запуска на клауде
-      //.csv("data.csv") // Для локального запуска
+      //.csv("gs://mmmmonkey/data.csv") //Для запуска на клауде
+      .csv("data.csv") // Для локального запуска
+
+    import ss.sqlContext.implicits._
+    val dataSet = df.as[Case]
+
+    dataSet.map(x => (x.city_or_county, 1))
+      //.groupByKey(_._2)
+      .groupByKey(x => x._1)
+      .reduceGroups((a, b) => (a._1 , a._2 + b._2))
+      .map(x => x._2)
+      .orderBy(col("_2").desc)
+      .show(10)
+
     // Вызываем наш метод
-    countByFilter(ss, dataFrame, "state")
+    //countByFilter(ss, dataFrame, "state")
     // Для локального запуска
-    //Thread.sleep(10 * 60 * 1000) //Для локального запуска, чтобы не рухнул c исключением
+    Thread.sleep(10 * 60 * 1000) //Для локального запуска, чтобы не рухнул c исключением
   }
 }
