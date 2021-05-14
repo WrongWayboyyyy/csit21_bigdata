@@ -48,12 +48,17 @@ object SparkDemo {
       .reduceByKey(_ + _)
       .cache()
 
+    rdd.toDF().write.format("bigquery")
+      .option("table", s"gun-shooting-analysis.${requiredFilter}_output")
+      .save()
+
     rdd
       .map(x => (x._2, x._1)) // Мэпим, чтобы ключ стоял на первой позиции
       .sortByKey(ascending = false) // Сортируем
       .map(x=> (x._2, x._1)) // Мэпим обратно
       .foreach(x => println(x)) // Выводим
   }
+
   def main(args: Array[String]): Unit = {
     Logger.getRootLogger.setLevel(Level.INFO) // Пока не знаю, что это
     // TODO: Соединение с Google Cloud BigQuery
@@ -71,6 +76,9 @@ object SparkDemo {
       .appName("CSIT 2021 Spark Application")
       .master("local[*]")
       .getOrCreate()
+
+    val bucket = "temp"
+    ss.conf.set("temporaryGcsBucket", bucket)
     // Считываем файл
     val dataFrame = ss.read
       .option("wholeFile", "true") // Магическая опция (немного даже не уверен, что нужна)
@@ -81,8 +89,8 @@ object SparkDemo {
       .option("escape", "\"") // Аналогично
       .option("encoding", "UTF-8") // На всякий случай
       .option("dateFormat", "yyyy-MM-dd") // Аналогично
-      //.csv("gs://mmmmonkey/data.csv") Для запуска на клауде
-      .csv("data.csv") // Для локального запуска
+      .csv("gs://mmmmonkey/data.csv") //Для запуска на клауде
+      //.csv("data.csv") // Для локального запуска
     // Вызываем наш метод
     countByFilter(ss, dataFrame, "state")
     // Для локального запуска
