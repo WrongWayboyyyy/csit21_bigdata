@@ -21,5 +21,5 @@ lazy val root = project
           //libraryDependencies += "com.google.cloud" % "pubsublite-spark-sql-streaming" % "0.1.0",
           libraryDependencies += "org.apache.bahir" %% "spark-streaming-pubsub" % "2.4.0",
     // https://mvnrepository.com/artifact/com.google.cloud.s..
-          libraryDependencies += "com.google.cloud.spark" % "spark-bigquery_2.12" % "0.16.1",
+          libraryDependencies += "com.google.cloud.spark" % "spark-bigquery-with-dependencies_2.12" % "0.20.0",
   )

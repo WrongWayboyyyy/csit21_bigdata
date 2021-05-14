@@ -1,6 +1,6 @@
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.{asc, col}
 
 // Класс для парсинга (содержит все те поля, что нужны для обработки DataFrame)
@@ -37,26 +37,9 @@ case class Case(incident_id: Option[Long],
 
 
 object SparkDemo {
-  // Функция подсчета количества элементов по заданному фильтру
-  def countByFilter(ss: SparkSession, df: DataFrame, requiredFilter: String): Unit = {
-    import ss.sqlContext.implicits._
-    // Получаем strong-typed DataSet[Case] из generic-typed DataFrame и отбираем данные по нужному фильтру
-    val dataSet = df.as[Case].filter(requiredFilter).as[String]
-    // Превращаем каждый элемент типа Case в пару (Case,int) собираем по ключу и кэшируем
-
-    //dataSet.map(x => (x, x.ci))
-  }
 
   def main(args: Array[String]): Unit = {
     Logger.getRootLogger.setLevel(Level.INFO) // Пока не знаю, что это
-    // TODO: Соединение с Google Cloud BigQuery
-    // Раскоментить, когда будем загружать на Storage
-//    if (args.length != 2) {
-//      throw new IllegalArgumentException("Provide exactly 2 arguments")
-//    }
-
-   // val inputPath = args(0)
-   // val outputPath = args(1)
 
     // Создаем новую сессию
     val ss = SparkSession
@@ -65,7 +48,7 @@ object SparkDemo {
       .master("local[*]")
       .getOrCreate()
 
-    val bucket = "temp"
+    val bucket = "csit21_tempbucket"
     ss.conf.set("temporaryGcsBucket", bucket)
     // Считываем файл
     val df = ss.read
@@ -82,20 +65,16 @@ object SparkDemo {
 
     import ss.sqlContext.implicits._
     val dataSet = df.as[Case]
-
-    dataSet.map(x => (x.city_or_county, 1))
-      //.groupByKey(_._2)
-      .groupByKey(x => x._1)
+    val resultDataset = dataSet.map(x => (x.city_or_county, 1))
+      .groupByKey(_._1)
       .reduceGroups((a, b) => (a._1 , a._2 + b._2))
       .map(x => x._2)
       .orderBy(col("_2").desc)
-      .write.format("bigquery")
-      .option("table", s"gun-shooting-analysis.city_output")
-      .save()
+      .cache()
 
-    // Вызываем наш метод
-    //countByFilter(ss, dataFrame, "state")
-    // Для локального запуска
-    //Thread.sleep(10 * 60 * 1000) //Для локального запуска, чтобы не рухнул c исключением
+    resultDataset.write.format("bigquery")
+      .mode(SaveMode.Overwrite)
+      .option("table", "data.output")
+      .save()
   }
 }
