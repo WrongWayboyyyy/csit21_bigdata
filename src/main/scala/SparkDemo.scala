@@ -90,9 +90,15 @@ object SparkDemo {
     val dataSet = df.as[Case]
 
     val resultDataSet: Unit = dataSet
-      .foreach(x => if (x.gun_stolen.contains("Unknown") || x.gun_stolen.contains("Stolen")) println(x))
-//      .reduceGroups((x, y) => (x._1, x._2 + y._2))
-//      .map(x => (x._1, x._2._2))
+      .map(x => if (x.gun_stolen.toString.contains("Stolen")
+        || x.gun_stolen.toString.contains("Unknown"))
+        "Stolen || Unknown" else "Other")
+      .groupBy("value")
+      .count()
+      .write.format("bigquery")
+      .mode(SaveMode.Overwrite)
+      .option("table", s"data.gun_stolen_output")
+      .save()
 
   }
 }
