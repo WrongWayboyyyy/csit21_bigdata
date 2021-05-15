@@ -1,6 +1,6 @@
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, Dataset, SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, SaveMode, SparkSession, functions}
 import org.apache.spark.sql.functions.{asc, col}
 
 // Класс для парсинга (содержит все те поля, что нужны для обработки DataFrame)
@@ -38,9 +38,28 @@ case class Case(incident_id: Option[Long],
 
 object SparkDemo {
 
+  def sortByParam(sparkSession: SparkSession, dataFrame: DataFrame, requiredFilter: String): Unit = {
+    import sparkSession.sqlContext.implicits._
+
+    var dataSet = dataFrame.as[Case]
+
+    var resultDataSet = dataSet
+      .groupBy(requiredFilter)
+      .count()
+      .sort($"count".desc)
+      .limit(10)
+      .cache()
+
+    resultDataSet
+      .write.format("bigquery")
+      .mode(SaveMode.Overwrite)
+      .option("table", s"data.sortBy_${requiredFilter}_output")
+      .save()
+  }
+
   def main(args: Array[String]): Unit = {
     Logger.getRootLogger.setLevel(Level.INFO) // Пока не знаю, что это
-
+    SparkSession
     // Создаем новую сессию
     val ss = SparkSession
       .builder()
@@ -53,7 +72,7 @@ object SparkDemo {
     // Считываем файл
     val df = ss.read
       .option("wholeFile", "true") // Магическая опция (немного даже не уверен, что нужна)
-      .option("multiline","true") // Аналогично
+      .option("multiline", "true") // Аналогично
       .option("header", "true") // Указываем, что в csv содержится заголовок
       .option("inferSchema", "true") // Аналогично 1 и 2))
       .option("quote", "\"") // Чтобы корректно читать nullField-ы в исходнои файле
@@ -61,20 +80,21 @@ object SparkDemo {
       .option("encoding", "UTF-8") // На всякий случай
       .option("dateFormat", "yyyy-MM-dd") // Аналогично
       .csv("gs://mmmmonkey/data.csv") //Для запуска на клауде
-      //.csv("data.csv") // Для локального запуска
+    //.csv("data.csv") // Для локального запуска
 
     import ss.sqlContext.implicits._
-    val dataSet = df.as[Case]
-    val resultDataset = dataSet.map(x => (x.city_or_county, 1))
-      .groupByKey(_._1)
-      .reduceGroups((a, b) => (a._1 , a._2 + b._2))
-      .map(x => x._2)
-      .orderBy(col("_2").desc)
-      .cache()
 
-    resultDataset.write.format("bigquery")
-      .mode(SaveMode.Overwrite)
-      .option("table", "data.output")
-      .save()
+    sortByParam(ss, df, "city_or_county")
+    sortByParam(ss, df, "state")
+
+    val dataSet = df.as[Case]
+
+    val resultDataSet: Unit = dataSet
+      .foreach(x => if (x.gun_stolen.contains("Unknown") || x.gun_stolen.contains("Stolen")) println(x))
+//      .reduceGroups((x, y) => (x._1, x._2 + y._2))
+//      .map(x => (x._1, x._2._2))
+
   }
 }
+
+
