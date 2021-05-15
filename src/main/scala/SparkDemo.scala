@@ -1,7 +1,7 @@
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.{DataFrame, Dataset, SaveMode, SparkSession, functions}
+import org.apache.spark.sql.functions.{asc, col}
 
 // Класс для парсинга (содержит все те поля, что нужны для обработки DataFrame)
 case class Case(incident_id: Option[Long],
@@ -37,55 +37,64 @@ case class Case(incident_id: Option[Long],
 
 
 object SparkDemo {
-  // Функция подсчета количества элементов по заданному фильтру
-  def countByFilter(ss: SparkSession, df: DataFrame, requiredFilter: String): Unit = {
-    import ss.sqlContext.implicits._
-    // Получаем strong-typed DataSet[Case] из generic-typed DataFrame и отбираем данные по нужному фильтру
-    val dataSet = df.as[Case].select(requiredFilter)
-    // Превращаем каждый элемент типа Case в пару (Case,int) собираем по ключу и кэшируем
-    val rdd = dataSet.rdd
-      .map(x => (x, 1))
-      .reduceByKey(_ + _)
+
+  def sortByParam(sparkSession: SparkSession, dataFrame: DataFrame, requiredFilter: String): Unit = {
+    import sparkSession.sqlContext.implicits._
+
+    var dataSet = dataFrame.as[Case]
+
+    var resultDataSet = dataSet
+      .groupBy(requiredFilter)
+      .count()
+      .sort($"count".desc)
+      .limit(10)
       .cache()
 
-    rdd
-      .map(x => (x._2, x._1)) // Мэпим, чтобы ключ стоял на первой позиции
-      .sortByKey(ascending = false) // Сортируем
-      .map(x=> (x._2, x._1)) // Мэпим обратно
-      .foreach(x => println(x)) // Выводим
+    resultDataSet
+      .write.format("bigquery")
+      .mode(SaveMode.Overwrite)
+      .option("table", s"data.sortBy_${requiredFilter}_output")
+      .save()
   }
+
   def main(args: Array[String]): Unit = {
     Logger.getRootLogger.setLevel(Level.INFO) // Пока не знаю, что это
-    // TODO: Соединение с Google Cloud BigQuery
-    // Раскоментить, когда будем загружать на Storage
-//    if (args.length != 2) {
-//      throw new IllegalArgumentException("Provide exactly 2 arguments")
-//    }
-
-   // val inputPath = args(0)
-   // val outputPath = args(1)
-
+    SparkSession
     // Создаем новую сессию
     val ss = SparkSession
       .builder()
       .appName("CSIT 2021 Spark Application")
       .master("local[*]")
       .getOrCreate()
+
+    val bucket = "csit21_tempbucket"
+    ss.conf.set("temporaryGcsBucket", bucket)
     // Считываем файл
-    val dataFrame = ss.read
+    val df = ss.read
       .option("wholeFile", "true") // Магическая опция (немного даже не уверен, что нужна)
-      .option("multiline","true") // Аналогично
+      .option("multiline", "true") // Аналогично
       .option("header", "true") // Указываем, что в csv содержится заголовок
       .option("inferSchema", "true") // Аналогично 1 и 2))
       .option("quote", "\"") // Чтобы корректно читать nullField-ы в исходнои файле
       .option("escape", "\"") // Аналогично
       .option("encoding", "UTF-8") // На всякий случай
       .option("dateFormat", "yyyy-MM-dd") // Аналогично
-      //.csv("gs://mmmmonkey/data.csv") Для запуска на клауде
-      .csv("data.csv") // Для локального запуска
-    // Вызываем наш метод
-    countByFilter(ss, dataFrame, "state")
-    // Для локального запуска
-    //Thread.sleep(10 * 60 * 1000) //Для локального запуска, чтобы не рухнул c исключением
+      .csv("gs://mmmmonkey/data.csv") //Для запуска на клауде
+    //.csv("data.csv") // Для локального запуска
+
+    import ss.sqlContext.implicits._
+
+    sortByParam(ss, df, "city_or_county")
+    sortByParam(ss, df, "state")
+
+    val dataSet = df.as[Case]
+
+    val resultDataSet: Unit = dataSet
+      .foreach(x => if (x.gun_stolen.contains("Unknown") || x.gun_stolen.contains("Stolen")) println(x))
+//      .reduceGroups((x, y) => (x._1, x._2 + y._2))
+//      .map(x => (x._1, x._2._2))
+
   }
 }
+
+
