@@ -23,12 +23,8 @@ lazy val root = project
     // https://mvnrepository.com/artifact/org.apache.bahir/s..
     libraryDependencies += "com.google.cloud" % "google-cloud-storage" % "1.70.0",
     // https://mvnrepository.com/artifact/com.google.cloud/g..
-    //libraryDependencies += "com.google.cloud" % "pubsublite-spark-sql-streaming" % "0.1.0",
-    libraryDependencies += "org.apache.bahir" %% "spark-streaming-pubsub" % kafkaVersion,
+      libraryDependencies += "com.google.cloud" % "google-cloud-pubsublite" % "0.14.1",
+    libraryDependencies += "com.google.cloud" % "google-cloud-pubsub" % "1.112.0",
     libraryDependencies += "com.google.cloud.spark" % "spark-bigquery-with-dependencies_2.12" % "0.20.0",
       // https://mvnrepository.com/artifact/org.apache.spark/spark-streaming-kafka-0-10
-    libraryDependencies += "org.apache.spark" %% "spark-streaming-kafka-0-10" % kafkaVersion,
-      libraryDependencies += "org.apache.spark" %% "spark-sql-kafka-0-10" % sparkVersion,
-
-
   )
