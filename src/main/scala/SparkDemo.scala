@@ -4,41 +4,11 @@ import org.apache.spark.sql.{DataFrame, Dataset, SaveMode, SparkSession, functio
 import org.apache.spark.sql.functions.{asc, col}
 
 // Класс для парсинга (содержит все те поля, что нужны для обработки DataFrame)
-case class Case(incident_id: Option[Long],
-                date: Option[String],
-                state : Option[String],
-                city_or_county: Option[String],
-                address : Option[String],
-                n_killed : Option[Long],
-                n_injured : Option[Long],
-                incident_url : Option[String],
-                source_url : Option[String],
-                incident_url_fields_missing : Option[Boolean],
-                congressional_district : Option[Long],
-                gun_stolen: Option[String],
-                gun_type: Option[String],
-                incident_characteristics: Option[String],
-                latitude: Option[Double],
-                location_description: Option[String],
-                longitude: Option[Double],
-                n_guns_involved: Option[Long],
-                notes: Option[String],
-                participant_age: Option[String],
-                participant_age_group: Option[String],
-                participant_gender: Option[String],
-                participant_name: Option[String],
-                participant_relationship: Option[String],
-                participant_status: Option[String],
-                participant_type: Option[String],
-                sources: Option[String],
-                state_house_district: Option[Long],
-                state_senate_district: Option[Long]
-               )
 
 
 object SparkDemo {
 
-  def sortByParam(sparkSession: SparkSession, dataFrame: DataFrame, requiredFilter: String): Unit = {
+  def sortByParam(sparkSession: SparkSession, dataFrame: DataFrame, requiredFilter: String, limit: Int = 10): Unit = {
     import sparkSession.sqlContext.implicits._
     // Парсим DataFrame как DataSet из элементов класса Case
     val dataSet = dataFrame.as[Case]
@@ -51,9 +21,7 @@ object SparkDemo {
       // Сортируем по насчитанному значению
       .sort($"count".desc)
       // Ограничиваем десятью значениями
-      .limit(10)
-      // Сохраняем
-      .cache()
+      .limit(limit)
 
     resultDataSet
       // Пишем в BigQuery
